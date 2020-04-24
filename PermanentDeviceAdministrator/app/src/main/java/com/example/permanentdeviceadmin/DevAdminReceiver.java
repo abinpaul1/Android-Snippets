@@ -50,7 +50,7 @@ public class DevAdminReceiver extends DeviceAdminReceiver {
         if (ACTION_DEVICE_ADMIN_DISABLE_REQUESTED.equals(action)) {
             CharSequence res = onDisableRequested(context, intent);
             if (res != null) {
-//                dpm.lockNow();
+                dpm.lockNow();
                 Bundle extras = getResultExtras(true);
                 extras.putCharSequence(EXTRA_DISABLE_WARNING, res);
             }
