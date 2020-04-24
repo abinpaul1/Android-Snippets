@@ -63,7 +63,7 @@ public class DevAdminReceiver extends DeviceAdminReceiver {
     // For 5 seconds after disable request, android stops any other apps from
     // drawing over the settings activity
     // We repeatedly lock the phone for 5 seconds to pass the time
-    // After that on unlocking, the settings activity would have been restarted from the intetn we
+    // After that on unlocking, the settings activity would have been restarted from the intent we
     // opened in the disable request handling
     TimerTask lock_task = new TimerTask() {
         @Override
