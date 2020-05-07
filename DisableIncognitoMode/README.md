@@ -15,6 +15,8 @@ https://www.xda-developers.com/install-adb-windows-macos-linux/
 For a detailed setup of enabling Device Owner, refer
 https://documentation.meraki.com/SM/Device_Enrollment/Enabling_Device_Owner_Mode_using_Android_Debug_Bridge_(ADB)
 
+Install the app, either using Android Studio or the [compiled apk](https://github.com/abinpaul1/Android-Snippets/master/DisableIncognitoMode/app/release/app-release.apk).<br>
+I recommend building from the project.<br>
 To set our app as device-owner,<br>
 `adb shell dpm set-device-owner com.example.disableincognitomode/.DevAdminReceiver`<br>
 Also grant the app device administartor permission, either by going to settings->Device Administrators or through adb<br>
@@ -25,6 +27,10 @@ You can then add your Google Account again.<br>
 
 
 ## Rooted Phones
+
+Install the app, either using Android Studio or the [compiled apk](https://github.com/abinpaul1/Android-Snippets/master/DisableIncognitoMode/app/release/app-release.apk).<br>
+
+
 ``` Create device_owner.xml
 <?xml version="1.0" encoding="utf-8" standalone="yes" ?>
 <device-owner package="your.owner.app.package.id" name="Your app name" />
@@ -42,6 +48,8 @@ Also grant device administrator permissions from settings.
 
 Run the app once and see incognito mode grayed out thereafter.
 
+Refer for a lots of other policies you can add to chrome
+https://cloud.google.com/docs/chrome-enterprise/policies/
 
 ### Reference
 https://stackoverflow.com/questions/21183328/how-to-make-my-app-a-device-owner<br>
