@@ -15,7 +15,7 @@ https://www.xda-developers.com/install-adb-windows-macos-linux/
 For a detailed setup of enabling Device Owner, refer
 https://documentation.meraki.com/SM/Device_Enrollment/Enabling_Device_Owner_Mode_using_Android_Debug_Bridge_(ADB)
 
-Install the app, either using Android Studio or the [compiled apk](https://github.com/abinpaul1/Android-Snippets/master/DisableIncognitoMode/app/release/app-release.apk).<br>
+Install the app, either using Android Studio or the [compiled apk](https://github.com/abinpaul1/Android-Snippets/raw/master/DisableIncognitoMode/app/release/app-release.apk).<br>
 I recommend building from the project.<br>
 To set our app as device-owner,<br>
 `adb shell dpm set-device-owner com.example.disableincognitomode/.DevAdminReceiver`<br>
@@ -28,7 +28,7 @@ You can then add your Google Account again.<br>
 
 ## Rooted Phones
 
-Install the app, either using Android Studio or the [compiled apk](https://github.com/abinpaul1/Android-Snippets/master/DisableIncognitoMode/app/release/app-release.apk).<br>
+Install the app, either using Android Studio or the [compiled apk](https://github.com/abinpaul1/Android-Snippets/raw/master/DisableIncognitoMode/app/release/app-release.apk).<br>
 
 
 ``` Create device_owner.xml
@@ -50,6 +50,14 @@ Run the app once and see incognito mode grayed out thereafter.
 
 Refer for a lots of other policies you can add to chrome
 https://cloud.google.com/docs/chrome-enterprise/policies/
+
+
+## How it Works
+
+The code works using [DevicePolicyManager](https://developer.android.com/reference/android/app/admin/DevicePolicyManager)
+It provies a method called `setApplicationRestrictions`, which can be used to configure settings for other apps provided the apps support it. Currently Chrome is the only app which supports this.
+We pass in the policies we want to set through this method and chrome updates its configurations.
+Also these methods are only accessible to the `device-owner` and also require device-admin permissions.
 
 ### Reference
 https://stackoverflow.com/questions/21183328/how-to-make-my-app-a-device-owner<br>
