@@ -26,6 +26,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import io.ticofab.androidgpxparser.parser.GPXParser;
 import io.ticofab.androidgpxparser.parser.domain.Gpx;
@@ -140,6 +142,26 @@ public class MainActivity extends AppCompatActivity {
         }, MapSnapshot.INCLUDE_FLAG_UPTODATE, map);
         new Thread(mapSnapshot).start();
     }
+
+//    //Alternate capture_snapshot function that doesn't use MapSnapshot but still updates map every 1ms
+//    private void capture_snapshot() {
+//        if (trackPointsIterator.hasNext()) {
+//            TrackPoint t = trackPointsIterator.next();
+//            Double lat = t.getLatitude();
+//            Double lon = t.getLongitude();
+//            new Timer().schedule(new TimerTask() {
+//                @Override
+//                public void run() {
+//                    runOnUiThread(new Runnable() {
+//                        @Override
+//                        public void run() {
+//                            schedule_snapshot(new GeoPoint(lat, lon));
+//                        }
+//                    });
+//                }
+//            }, 1);
+//        }
+//    }
     
 
     // Utility function to saves the bitmap to a file
