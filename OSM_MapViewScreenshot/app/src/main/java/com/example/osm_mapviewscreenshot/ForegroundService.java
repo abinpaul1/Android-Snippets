@@ -36,6 +36,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import io.ticofab.androidgpxparser.parser.GPXParser;
 import io.ticofab.androidgpxparser.parser.domain.Gpx;
@@ -48,8 +49,17 @@ import io.ticofab.androidgpxparser.parser.domain.TrackSegment;
 
 // Refer : https://heartbeat.fritz.ai/using-foreground-services-for-executing-long-running-processes-in-android-fac0b8585c3a
 
+// Recursive works fine, UI doesnt freeze
+// OS optimizes and kills process, so try acquiring wakelock to keep running
+
 public class ForegroundService extends Service {
     public static final String CHANNEL_ID = "ForegroundServiceChannel";
+    int notificationID = 123;
+    String input = "Snapshotting";
+    Intent notificationIntent;
+    PendingIntent pendingIntent ;
+    NotificationManager manager;
+
     List<TrackPoint> gpxTrackPoints;
     Iterator<TrackPoint> trackPointsIterator;
 
@@ -57,10 +67,16 @@ public class ForegroundService extends Service {
     ExecutorService executorService = Executors.newCachedThreadPool();
     File path;
     HashMap<MapSnapshot, Integer> mapping = new HashMap<>();
+    AtomicInteger count = new AtomicInteger(0);
+
+    Context ctx;
+    MapView map = null;
+    MapTileProviderBase mapTileProviderBase = null;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        this.ctx = getApplicationContext();
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
@@ -68,24 +84,24 @@ public class ForegroundService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
 
         // Setting notification
-        String input = "Snapshotting";
+        manager = getSystemService(NotificationManager.class);
         createNotificationChannel();
-        Intent notificationIntent = new Intent(this, MainActivity.class);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this,
+        notificationIntent = new Intent(this, MainActivity.class);
+        pendingIntent = PendingIntent.getActivity(this,
                 0, notificationIntent, 0);
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("Foreground Service")
                 .setContentText(input)
                 .setContentIntent(pendingIntent)
                 .build();
-        startForeground(1, notification);
+        startForeground(notificationID, notification);
 
 
         //do heavy work on a background thread
         take_snapshots();
 
 
-        return START_NOT_STICKY;
+        return START_STICKY;
     }
 
     @Override
@@ -107,15 +123,23 @@ public class ForegroundService extends Service {
                     "Foreground Service Channel",
                     NotificationManager.IMPORTANCE_DEFAULT
             );
-            NotificationManager manager = getSystemService(NotificationManager.class);
             manager.createNotificationChannel(serviceChannel);
         }
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.O)
+    private void updateNotification(int current){
+        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle("Index" + Integer.toString(current))
+                .setContentText(input)
+                .setSmallIcon(R.drawable.person)
+                .setContentIntent(pendingIntent)
+                .build();
+        manager.notify(notificationID, notification);
+    }
+
 
     public void take_snapshots(){
-        Context ctx = getApplicationContext();
-
         Configuration.getInstance().load(ctx, PreferenceManager.getDefaultSharedPreferences(ctx));
 
         org.osmdroid.config.IConfigurationProvider osmConf = org.osmdroid.config.Configuration.getInstance();
@@ -123,7 +147,6 @@ public class ForegroundService extends Service {
         osmConf.setOsmdroidBasePath(basePath);
         File tileCache = new File(ctx.getFilesDir().getAbsolutePath()+"/osmdroid/tiles");
         osmConf.setOsmdroidTileCache(tileCache);
-
 
         // Open gpx file and loads all points
         if (open_gpx_file()) {
@@ -135,23 +158,94 @@ public class ForegroundService extends Service {
         path.mkdirs();  // make sure the folder exists.
 
         // Do the work here.
-        MapView map = new MapView(ctx);
-        MapTileProviderBase mapTileProviderBase = new MapTileProviderBasic(ctx);
+        map = new MapView(ctx);
+        mapTileProviderBase = new MapTileProviderBasic(ctx);
 
 
+        // Method 1 : Recursive snapshot
+        recursive_snapshot(trackPointsIterator.next(),0);
+
+
+//        // Method 2: Iterative snapshot
+//        iterative_snapshot();
+    }
+
+    private void recursive_snapshot(TrackPoint point, int i){
+        if (point==null)
+            return;
+
+        Double lat = point.getLatitude();
+        Double lon = point.getLongitude();
+
+        GeoPoint pt = new GeoPoint(lat, lon);
+
+
+        Polyline line = new Polyline();
+        line.setPoints(pts);
+
+        Marker marker = new Marker(map);
+        marker.setPosition(new GeoPoint(lat, lon));
+        marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
+        marker.setDefaultIcon();
+
+        List<Overlay> mOverlay = new ArrayList<>();
+        mOverlay.add(line);
+        mOverlay.add(marker);
+
+
+        Projection mProjection = new Projection(15.00, 800, 800, pt, 0, true, true, 0, 0);
+
+        final MapSnapshot mapSnapshot = new MapSnapshot(new MapSnapshot.MapSnapshotable() {
+            @Override
+            public void callback(final MapSnapshot pMapSnapshot) {
+                // Save the current snapshot
+                Log.d("Thread", Thread.currentThread().getName());
+
+                if (pMapSnapshot.getStatus() != MapSnapshot.Status.CANVAS_OK) {
+                    return;
+                }
+
+                String img_name = "map-" + mapping.get(pMapSnapshot) + ".png";
+                File file = new File(path, img_name);
+
+                pMapSnapshot.save(file); // Saves to specified file on storage
+                Log.d("Ex", "Saved " + Integer.toString(mapping.get(pMapSnapshot)));
+
+                // Update notification
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    if (i%16==0){
+                        updateNotification(i);
+                    }
+                }
+
+
+                if(trackPointsIterator.hasNext())
+                    recursive_snapshot(trackPointsIterator.next(),i+1);
+                else{
+                    stopForeground(true);
+                }
+            }
+        }, MapSnapshot.INCLUDE_FLAG_UPTODATE, mapTileProviderBase, mOverlay, mProjection);
+
+        // Keep all Mapsnapshots in Hashmap
+        mapping.put(mapSnapshot, i);
+        mapSnapshot.run();
+    }
+
+    private void iterative_snapshot(){
         // Schedule for each location separealty
-        for (int i =0; i< gpxTrackPoints.size(); ++i){
-            Log.d("Ex","Point "+ Integer.toString(i));
+        for (int i =0; i< gpxTrackPoints.size(); ++i) {
+            Log.d("Ex", "Point " + Integer.toString(i));
             Double lat = gpxTrackPoints.get(i).getLatitude();
             Double lon = gpxTrackPoints.get(i).getLongitude();
-            GeoPoint pt = new GeoPoint(lat,lon);
+            GeoPoint pt = new GeoPoint(lat, lon);
 
 
             Polyline line = new Polyline();
             line.setPoints(pts);
 
             Marker marker = new Marker(map);
-            marker.setPosition(new GeoPoint(lat,lon));
+            marker.setPosition(new GeoPoint(lat, lon));
             marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
             marker.setDefaultIcon();
 
@@ -164,6 +258,7 @@ public class ForegroundService extends Service {
 
             // Todo : Extend Mapsnapshot to take in paramter and pass to callback
             final MapSnapshot mapSnapshot = new MapSnapshot(new MapSnapshot.MapSnapshotable() {
+                @RequiresApi(api = Build.VERSION_CODES.M)
                 @Override
                 public void callback(final MapSnapshot pMapSnapshot) {
                     // Save the current snapshot
@@ -177,7 +272,15 @@ public class ForegroundService extends Service {
                     File file = new File(path, img_name);
 
                     pMapSnapshot.save(file); // Saves to specified file on storage
-                    Log.d("Ex","Saved "+ Integer.toString(mapping.get(pMapSnapshot)));
+
+                    int temp = count.getAndIncrement();
+
+//                    // Log progress to notification bar
+//                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+//                        updateNotification(temp);
+//                    }
+
+                    Log.d("Ex", "Saved " + Integer.toString(mapping.get(pMapSnapshot)));
                 }
             }, MapSnapshot.INCLUDE_FLAG_UPTODATE, mapTileProviderBase, mOverlay, mProjection);
 
@@ -195,6 +298,7 @@ public class ForegroundService extends Service {
             Double lon = gpxTrackPoints.get(i).getLongitude();
             pts.add(new GeoPoint(lat,lon));
         }
+
         Log.d("Points", "Successfully Loaded " + gpxTrackPoints.size() + " Points");
     }
 
